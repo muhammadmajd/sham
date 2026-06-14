@@ -1,0 +1,20 @@
+[15-Feb-2026 12:57:46 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/maitechno/mvpn.maitechno.com/config/mail.php:17
+Stack trace:
+#0 {main}
+  thrown in /home/maitechno/mvpn.maitechno.com/config/mail.php on line 17
+[15-Feb-2026 12:57:46 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/maitechno/mvpn.maitechno.com/config/auth.php:17
+Stack trace:
+#0 {main}
+  thrown in /home/maitechno/mvpn.maitechno.com/config/auth.php on line 17
+[15-Feb-2026 12:58:24 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/maitechno/mvpn.maitechno.com/config/jwt.php:28
+Stack trace:
+#0 {main}
+  thrown in /home/maitechno/mvpn.maitechno.com/config/jwt.php on line 28
+[15-Feb-2026 12:58:40 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/maitechno/mvpn.maitechno.com/config/queue.php:16
+Stack trace:
+#0 {main}
+  thrown in /home/maitechno/mvpn.maitechno.com/config/queue.php on line 16
+[15-Feb-2026 12:59:31 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/maitechno/mvpn.maitechno.com/config/cache.php:18
+Stack trace:
+#0 {main}
+  thrown in /home/maitechno/mvpn.maitechno.com/config/cache.php on line 18

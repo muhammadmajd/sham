@@ -72,6 +72,7 @@ Route::middleware(['auth:web', 'web.admin'])
         Route::post('/devices/{device}/attach-user', [DevicePageController::class, 'attachUser'])->name('devices.attach-user');
         Route::post('/devices/{device}/detach-user', [DevicePageController::class, 'detachUser'])->name('devices.detach-user');
         Route::post('/devices/{device}/reset-traffic', [DevicePageController::class, 'resetTraffic'])->name('devices.reset-traffic');
+        Route::post('/devices/{device}/toggle-active', [DevicePageController::class, 'toggleActive'])->name('devices.toggle-active');
 
         Route::get('/applications', [ApplicationPageController::class, 'index'])->name('applications.index');
         Route::get('/applications/create', [ApplicationPageController::class, 'create'])->name('applications.create');

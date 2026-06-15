@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if(!Schema::hasColumn('users',column: 'subscription')) {
-                $table->string('subscription')->default(false)->after('traffic_limit');
+        Schema::table('plans', function (Blueprint $table) {
+            if (!Schema::hasColumn('plans', 'devices_number')) {
+                $table->integer('devices_number')->default(0);
             }
         });
     }
@@ -23,9 +23,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if(Schema::hasColumn('users','subscription')) {
-                $table->dropColumn('subscription');
+        Schema::table('plans', function (Blueprint $table) {
+            if (Schema::hasColumn('plans', 'devices_number')) {
+                $table->dropColumn('devices_number');
             }
         });
     }

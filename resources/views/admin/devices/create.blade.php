@@ -87,6 +87,17 @@
                             </div>
                         </div>
 
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Active</label>
+                                <select name="active"
+                                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <option value="1" {{ old('active', '1') == '1' ? 'selected' : '' }}>Yes</option>
+                                    <option value="0" {{ old('active') == '0' ? 'selected' : '' }}>No</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="flex items-center gap-3">
                             <button type="submit"
                                 class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700">

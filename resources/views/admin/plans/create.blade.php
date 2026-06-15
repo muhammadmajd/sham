@@ -75,6 +75,11 @@
                                 <input type="number" name="traffic_limit" value="{{ old('traffic_limit', 0) }}"
                                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Devices Number</label>
+                                <input type="number" name="devices_number" value="{{ old('devices_number', 0) }}"
+                                       class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            </div>
                         </div>
 
                         <div class="flex items-center gap-3">

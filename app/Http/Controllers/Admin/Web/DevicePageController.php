@@ -60,6 +60,7 @@ class DevicePageController extends Controller
             'download_bytes' => ['nullable', 'integer', 'min:0'],
             'upload_bytes' => ['nullable', 'integer', 'min:0'],
             'last_seen_at' => ['nullable', 'date'],
+            'active' => ['nullable', 'boolean'],
         ]);
 
         Device::create([
@@ -71,6 +72,7 @@ class DevicePageController extends Controller
             'download_bytes' => $data['download_bytes'] ?? 0,
             'upload_bytes' => $data['upload_bytes'] ?? 0,
             'last_seen_at' => $data['last_seen_at'] ?? null,
+            'active' => $data['active'] ?? true,
         ]);
         AuditService::log('Device.store', 'Device', [
             'by' => 'admin',
@@ -99,6 +101,7 @@ class DevicePageController extends Controller
             'download_bytes' => ['nullable', 'integer', 'min:0'],
             'upload_bytes' => ['nullable', 'integer', 'min:0'],
             'last_seen_at' => ['nullable', 'date'],
+            'active' => ['nullable', 'boolean'],
         ]);
 
         $device->update($data);
@@ -163,6 +166,20 @@ class DevicePageController extends Controller
         ]);
 
         return redirect()->route('admin.devices.index')->with('success', 'Traffic reset.');
+    }
+
+    public function toggleActive(Device $device)
+    {
+        $device->active = !$device->active;
+        $device->save();
+
+        AuditService::log('Device.toggleActive', 'Device', [
+            'by' => 'admin',
+            'device_uid' => $device->device_uid,
+            'active' => $device->active,
+        ]);
+
+        return redirect()->route('admin.devices.index')->with('success', 'Device status updated.');
     }
 
 }

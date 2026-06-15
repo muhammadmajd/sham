@@ -5,10 +5,14 @@ namespace App\Services;
 use App\Models\Plan;
 use App\Models\User;
 use App\Models\UserSubscription;
+use App\Services\TrafficLimitService;
 use Carbon\Carbon;
 
 class UserSubscriptionService
 {
+    public function __construct(
+        private TrafficLimitService $trafficLimits
+    ) {}
     public function assignPlanByAdmin(
         User $user,
         Plan $plan,
@@ -38,6 +42,12 @@ class UserSubscriptionService
         $user->stripe_subscription_id = null;
 
         $user->save();
+        /*
+        * After plan change:
+        * every attached device gets:
+        * user.traffic_limit / plan.devices_number
+        */
+        $this->trafficLimits->redistributeUserDeviceLimits($user);
 
         UserSubscription::create([
             'user_id' => $user->id,

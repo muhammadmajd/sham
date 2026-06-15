@@ -8,6 +8,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use App\Models\Plan;
 
 class User extends Authenticatable
 {
@@ -59,6 +60,18 @@ class User extends Authenticatable
         static::creating(function (User $user) {
             if (empty($user->uuid)) {
                 $user->uuid = (string) Str::uuid();
+            }
+
+            if ((int) ($user->traffic_limit ?? 0) <= 0) {
+                $freePlan = Plan::where('key', 'free')->first();
+
+                if ($freePlan) {
+                    $user->traffic_limit = (int) $freePlan->traffic_limit;
+                }
+            }
+
+            if (empty($user->subscription)) {
+                $user->subscription = 'free';
             }
         });
 

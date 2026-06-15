@@ -41,7 +41,7 @@ class XrayAdminService
         foreach ($servers as $server) {
             try {
                 $script = sprintf(
-                    "sudo /usr/local/bin/xray_client_sync.py %s %s %s %s && sudo %s run -test -c %s && sudo /usr/bin/systemctl restart xray",
+                    "sudo -n /usr/local/bin/xray_client_sync.py %s %s %s %s && sudo -n %s run -test -c %s && sudo -n /usr/bin/systemctl restart xray",
                     $this->shellQuotePosix($server->ssh_config_path),
                     $this->shellQuotePosix($uuid),
                     $this->shellQuotePosix($email),
@@ -231,16 +231,46 @@ class XrayAdminService
         foreach ($servers as $server) {
             try {
                 $script = sprintf(
-                    "sudo %s api statsquery --server=%s",
-                    $server->xray_bin_path,
-                    $server->xray_stats_server
+                    "sudo -n %s api statsquery --server=%s",
+                    escapeshellarg($server->xray_bin_path),
+                    escapeshellarg($server->xray_stats_server)
                 );
 
                 $output = $this->runSshToHost($server, $script);
-                $decoded = json_decode($output, true);
+
+                /*
+             * IMPORTANT:
+             * Sometimes SSH/sudo/Xray may return warnings before the JSON.
+             * Example:
+             * Warning: ...
+             * {
+             *   "stat": [...]
+             * }
+             *
+             * So we find the first JSON object start.
+             */
+                $jsonStart = strpos($output, '{');
+
+                if ($jsonStart === false) {
+                    throw new \RuntimeException(
+                        'No JSON object found in statsquery output: ' . $output
+                    );
+                }
+
+                $json = substr($output, $jsonStart);
+
+                $decoded = json_decode($json, true);
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    throw new \RuntimeException(
+                        'Failed to decode statsquery JSON: ' . json_last_error_msg() .
+                            ' | output=' . $output
+                    );
+                }
+
                 $serverTraffic = [];
 
-                if (is_array($decoded) && isset($decoded['stat']) && is_array($decoded['stat'])) {
+                if (isset($decoded['stat']) && is_array($decoded['stat'])) {
                     foreach ($decoded['stat'] as $item) {
                         $name = $item['name'] ?? '';
                         $value = (int) ($item['value'] ?? 0);
@@ -252,20 +282,32 @@ class XrayAdminService
                         $email = $matches[1];
                         $direction = $matches[2];
 
+                        Log::info('Matched Xray stat', [
+                            'server_id' => $server->id,
+                            'host' => $server->host,
+                            'name' => $name,
+                            'email' => $email,
+                            'direction' => $direction,
+                            'value' => $value,
+                            'email_exists_in_db_lookup' => isset($emailLookup[$email]),
+                        ]);
+
                         if (!isset($emailLookup[$email])) {
                             continue;
                         }
 
-                        $serverTraffic[$email] ??= [
-                            'upload_bytes' => 0,
-                            'download_bytes' => 0,
-                        ];
+                        if (!isset($serverTraffic[$email])) {
+                            $serverTraffic[$email] = [
+                                'upload_bytes' => 0,
+                                'download_bytes' => 0,
+                            ];
+                        }
 
                         if ($direction === 'uplink') {
-                            $serverTraffic[$email]['upload_bytes'] = $value;
+                            $serverTraffic[$email]['upload_bytes'] += $value;
                             $traffic[$email]['upload_bytes'] += $value;
                         } else {
-                            $serverTraffic[$email]['download_bytes'] = $value;
+                            $serverTraffic[$email]['download_bytes'] += $value;
                             $traffic[$email]['download_bytes'] += $value;
                         }
                     }
@@ -395,8 +437,8 @@ class XrayAdminService
     private function runSshWindows(string $sshBin, string $sshKey, string $sshTarget, string $script, string $host): string
     {
         $sshCommand = sprintf(
-            '"%s" -i "%s" -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null %s "%s"',
-            $sshBin,
+            '"%s" -i "%s" -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=10 %s "%s"',
+            $sshBin ?: 'ssh',
             $sshKey,
             $sshTarget,
             str_replace('"', '\"', $script)
@@ -424,7 +466,7 @@ class XrayAdminService
     private function runSshProcess(VpnServer $server, string $sshTarget, string $script): string
     {
         $args = [
-            $server->ssh_bin,
+            $server->ssh_bin ?: 'ssh',
             '-i',
             $server->ssh_key,
             '-o',
@@ -433,14 +475,18 @@ class XrayAdminService
             'StrictHostKeyChecking=no',
             '-o',
             'UserKnownHostsFile=/dev/null',
+            '-o',
+            'LogLevel=ERROR',
+            '-o',
+            'ConnectTimeout=10',
             $sshTarget,
             $script,
         ];
-    
+
         $process = new Process($args);
-        $process->setTimeout($server->ssh_timeout ?? 30);
+        $process->setTimeout($server->ssh_timeout ?? 60);
         $process->run();
-    
+
         if (!$process->isSuccessful()) {
             throw new \RuntimeException(
                 trim($process->getErrorOutput())
@@ -448,7 +494,7 @@ class XrayAdminService
                     ?: "SSH command failed on host {$server->host}"
             );
         }
-    
+
         return $process->getOutput();
     }
 

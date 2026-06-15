@@ -7,6 +7,7 @@ use App\Models\Plan;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\UserSubscriptionService;
+use App\Services\TrafficLimitService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -70,8 +71,11 @@ class AdminUserController extends Controller
         return response()->json($user);
     }
 
-    public function store(Request $request, UserSubscriptionService $service)
-    {
+    public function store(
+        Request $request,
+        UserSubscriptionService $service,
+        TrafficLimitService $trafficLimits
+    ) {
         AuditService::log('admin.users.store', 'User', [
             'from' => false,
             'to' => true,
@@ -95,6 +99,9 @@ class AdminUserController extends Controller
         DB::beginTransaction();
 
         try {
+            $freePlan = $trafficLimits->freePlan();
+            $defaultFreeTrafficLimit = (int) ($freePlan?->traffic_limit ?? 0);
+
             $user = User::create([
                 'uuid' => (string) Str::uuid(),
                 'code' => $cleanCode,
@@ -108,7 +115,7 @@ class AdminUserController extends Controller
                 'plan_id' => null,
                 'subscription' => 'free',
                 'traffic_used' => $data['traffic_used'] ?? 0,
-                'traffic_limit' => $data['traffic_limit'] ?? 0,
+                'traffic_limit' => $data['traffic_limit'] ?? $defaultFreeTrafficLimit,
             ]);
 
             if (!empty($data['plan_id'])) {

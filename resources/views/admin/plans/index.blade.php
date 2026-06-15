@@ -55,6 +55,7 @@
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Currency</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Interval</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Traffic Limit</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Devices Number</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Actions</th>
                             </tr>
                         </thead>
@@ -68,6 +69,7 @@
                                     <td class="px-4 py-3">{{ $plan->currency }}</td>
                                     <td class="px-4 py-3">{{ $plan->interval }}</td>
                                     <td class="px-4 py-3">{{ $plan->traffic_limit }}</td>
+                                    <td class="px-4 py-3">{{ $plan->devices_number }}</td>
                                     <td class="px-4 py-3">
                                         <div class="flex flex-wrap gap-2">
                                             <a href="{{ route('admin.plans.edit', $plan) }}"

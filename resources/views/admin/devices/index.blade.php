@@ -56,6 +56,7 @@
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Download</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Upload</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Last Seen</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Active</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Actions</th>
                             </tr>
                         </thead>
@@ -78,11 +79,30 @@
                                     <td class="px-4 py-3">{{ $device->upload_bytes }}</td>
                                     <td class="px-4 py-3">{{ $device->last_seen_at }}</td>
                                     <td class="px-4 py-3">
+                                        @if($device->active)
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+                                                Active
+                                            </span>
+                                        @else
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">
+                                                Inactive
+                                            </span>
+                                        @endif
+                                    </td>
+                                    <td class="px-4 py-3">
                                         <div class="flex flex-wrap gap-2">
                                             <a href="{{ route('admin.devices.edit', $device) }}"
                                                class="inline-flex items-center px-3 py-2 bg-gray-800 border border-transparent rounded-md text-xs font-semibold text-white hover:bg-gray-700">
                                                 Edit
                                             </a>
+
+                                            <form method="POST" action="{{ route('admin.devices.toggle-active', $device) }}">
+                                                @csrf
+                                                <button type="submit"
+                                                    class="inline-flex items-center px-3 py-2 bg-amber-500 border border-transparent rounded-md text-xs font-semibold text-white hover:bg-amber-600">
+                                                    Toggle
+                                                </button>
+                                            </form>
 
                                             <form method="POST" action="{{ route('admin.devices.reset-traffic', $device) }}">
                                                 @csrf

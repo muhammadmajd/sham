@@ -19,6 +19,7 @@ class Device extends Model
         'speed_limit_bps',
         'traffic_limit_bytes',
         'last_seen_at',
+        'active'
     ];
 
     protected $casts = [
@@ -27,6 +28,7 @@ class Device extends Model
         'speed_limit_bps' => 'integer',
         'traffic_limit_bytes' => 'integer',
         'last_seen_at' => 'datetime',
+        'active' => 'boolean'
     ];
 
     /**

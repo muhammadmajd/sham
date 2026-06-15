@@ -59,23 +59,6 @@ npm install
 npm run build
 ```
 
-### Keep Deployments in Sync
-
-Do not copy a new deployment over an existing application directory without
-removing files that no longer exist in the project. Laravel loads every PHP
-file in `config/`, so a stale configuration file can boot code for a package
-that is no longer installed.
-
-When deploying with `rsync`, synchronize application files with deletion
-enabled while preserving runtime and environment data:
-
-```bash
-rsync -a --delete \
-    --exclude=.env \
-    --exclude=storage/ \
-    /path/to/release/ /var/www/mvpnapi/
-```
-
 ---
 
 ## Step 4: Configure Environment
@@ -97,26 +80,6 @@ Key settings:
 - `APP_DEBUG=false`
 - `APP_URL=https://your-domain.com`
 - `DB_*` (database settings)
-
-### Recovery: `Laravel\Sanctum\Sanctum` Class Not Found
-
-This application authenticates API requests with JWT and does not install or
-use `laravel/sanctum`. If a server reports that `config/sanctum.php` cannot
-load `Laravel\Sanctum\Sanctum`, remove the stale configuration file from the
-deployed application and rebuild Laravel caches:
-
-```bash
-cd /var/www/mvpnapi
-rm config/sanctum.php
-php artisan optimize:clear
-composer install --optimize-autoloader --no-dev
-php artisan config:cache
-php artisan route:cache
-```
-
-Replace `/var/www/mvpnapi` with the deployed application path. If PHP-FPM or
-long-running queue workers use OPcache, reload or restart those processes
-after rebuilding the caches.
 
 ---
 

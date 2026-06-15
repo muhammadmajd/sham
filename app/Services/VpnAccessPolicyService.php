@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Services;
-
+use App\Models\Plan;
 use App\Models\Device;
 use App\Models\User;
 use App\Models\VpnServer;
@@ -34,23 +34,175 @@ class VpnAccessPolicyService
      */
     private function computeDecision(?User $user, Device $device, VpnServer $server): array
     {
-        $serverType = strtolower((string) ($server->server_payment_type ?? 'free'));
+        $serverType = strtolower((string) ($server->server_Payment_type ?? 'free'));
         $isPaidServer = $serverType === 'paid';
         $isFreeServer = !$isPaidServer;
 
-        $hasPlan = $this->userHasPlan($user);
-        $hasActivePlan = $hasPlan && !$this->isPlanExpired($user);
+        /*
+        |--------------------------------------------------------------------------
+        | 1) Guest / user not logged in
+        |--------------------------------------------------------------------------
+        */
+        if (!$user) {
+            if (!$isFreeServer) {
+                return $this->deny(
+                    reason: 'subscription_required',
+                    message: 'This server requires an active subscription.',
+                    meta: [
+                        'server_type' => $serverType,
+                    ]
+                );
+            }
 
-        $trafficUsed = (int) ($user?->traffic_used ?? 0);
-        $trafficLimit = (int) ($user?->traffic_limit ?? 0);
+            $deviceTrafficUsed = (int) $device->download_bytes + (int) $device->upload_bytes;
+            $deviceTrafficLimit = (int) $device->traffic_limit_bytes;
 
-        $freeLimitReached =
-            !$hasActivePlan &&
-            $isFreeServer &&
-            $trafficLimit > 0 &&
-            $trafficUsed >= $trafficLimit;
+            if ($deviceTrafficLimit > 0 && $deviceTrafficUsed >= $deviceTrafficLimit) {
+                return $this->deny(
+                    reason: 'free_limit_reached',
+                    message: 'Your free traffic has ended. Please subscribe to continue.',
+                    meta: [
+                        'traffic_scope' => 'device',
+                        'traffic_used' => $deviceTrafficUsed,
+                        'traffic_limit' => $deviceTrafficLimit,
+                        'download_bytes' => (int) $device->download_bytes,
+                        'upload_bytes' => (int) $device->upload_bytes,
+                        'remaining_bytes' => max(0, $deviceTrafficLimit - $deviceTrafficUsed),
+                        'server_type' => $serverType,
+                    ]
+                );
+            }
 
-        return $this->buildDecision($hasActivePlan, $isPaidServer, $freeLimitReached, $trafficUsed, $trafficLimit, $serverType);
+            return $this->allow(
+                reason: 'guest_free_allowed',
+                message: 'VPN can start.',
+                meta: [
+                    'traffic_scope' => 'device',
+                    'traffic_used' => $deviceTrafficUsed,
+                    'traffic_limit' => $deviceTrafficLimit,
+                    'download_bytes' => (int) $device->download_bytes,
+                    'upload_bytes' => (int) $device->upload_bytes,
+                    'remaining_bytes' => $deviceTrafficLimit > 0
+                        ? max(0, $deviceTrafficLimit - $deviceTrafficUsed)
+                        : null,
+                    'server_type' => $serverType,
+                ]
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 2) Logged-in user
+        |--------------------------------------------------------------------------
+        */
+        $hasActivePaidPlan = $user->hasActiveSubscription();
+
+        $plan = $this->resolvePlanForUser($user, $hasActivePaidPlan);
+
+        if (!$plan) {
+            return $this->deny(
+                reason: 'subscription_required',
+                message: 'No free plan is available. Please subscribe.',
+                meta: [
+                    'server_type' => $serverType,
+                ]
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 3) Logged-in but free plan cannot access paid server
+        |--------------------------------------------------------------------------
+        */
+        if (!$hasActivePaidPlan && $isPaidServer) {
+            return $this->deny(
+                reason: 'subscription_required',
+                message: 'This server requires an active subscription.',
+                meta: [
+                    'plan_id' => $plan->id,
+                    'plan_key' => $plan->key,
+                    'plan_name' => $plan->name,
+                    'server_type' => $serverType,
+                ]
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 4) Plan expired
+        |--------------------------------------------------------------------------
+        */
+        if ($this->isPlanExpired($user)) {
+            return $this->deny(
+                reason: 'plan_expired',
+                message: 'Your plan has expired. Please renew your subscription.',
+                meta: [
+                    'plan_id' => $plan->id,
+                    'plan_key' => $plan->key,
+                    'plan_name' => $plan->name,
+                    'server_type' => $serverType,
+                ]
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 5) Device number limit
+        |--------------------------------------------------------------------------
+        | device with no user -> new device
+        */
+        $devicesLimit = (int) ($plan->devices_number ?? 0);
+
+        $otherDevicesCount = Device::query()
+            ->where('user_id', $user->id)
+            ->where('id', '!=', $device->id)
+            ->count();
+
+        $effectiveDevicesCount = $otherDevicesCount + 1;
+
+        if ($devicesLimit > 0 && $effectiveDevicesCount > $devicesLimit) {
+            if (!$hasActivePaidPlan) {
+                return $this->deny(
+                    reason: 'free_device_limit_reached',
+                    message: "You cannot connect a new device. Device limit is {$devicesLimit} for the free plan. Please subscribe.",
+                    meta: [
+                        'plan_id' => $plan->id,
+                        'plan_key' => $plan->key,
+                        'plan_name' => $plan->name,
+                        'devices_limit' => $devicesLimit,
+                        'devices_count' => $effectiveDevicesCount,
+                        'server_type' => $serverType,
+                    ]
+                );
+            }
+
+            return $this->deny(
+                reason: 'plan_device_limit_reached',
+                message: "You cannot connect a new device. Device limit is {$devicesLimit} for this plan. Please subscribe to another plan.",
+                meta: [
+                    'plan_id' => $plan->id,
+                    'plan_key' => $plan->key,
+                    'plan_name' => $plan->name,
+                    'devices_limit' => $devicesLimit,
+                    'devices_count' => $effectiveDevicesCount,
+                    'server_type' => $serverType,
+                ]
+            );
+        }
+
+        return $this->allow(
+            reason: $hasActivePaidPlan ? 'paid_plan_allowed' : 'free_plan_allowed',
+            message: 'VPN can start.',
+            meta: [
+                'plan_id' => $plan->id,
+                'plan_key' => $plan->key,
+                'plan_name' => $plan->name,
+                'devices_limit' => $devicesLimit,
+                'devices_count' => $effectiveDevicesCount,
+                'has_active_paid_plan' => $hasActivePaidPlan,
+                'server_type' => $serverType,
+            ]
+        );
     }
 
     /**
@@ -127,11 +279,27 @@ class VpnAccessPolicyService
     private function getCacheKey(?User $user, Device $device, VpnServer $server): string
     {
         $userId = $user?->id ?? 'anonymous';
-        $trafficUsed = $user?->traffic_used ?? 0;
-        $trafficLimit = $user?->traffic_limit ?? 0;
+        $deviceTrafficUsed = (int) $device->download_bytes + (int) $device->upload_bytes;
+        $deviceTrafficLimit = (int) $device->traffic_limit_bytes;
+
+        $userPlanId = $user?->plan_id ?? 0;
         $subscriptionEndsAt = $user?->subscription_ends_at?->timestamp ?? 0;
 
-        return "vpn_access:{$userId}:{$device->id}:{$server->id}:{$trafficUsed}:{$trafficLimit}:{$subscriptionEndsAt}";
+        $devicesCount = $user
+            ? Device::where('user_id', $user->id)->count()
+            : 0;
+
+            return implode(':', [
+            'vpn_access',
+            $userId,
+            $device->id,
+            $server->id,
+            $deviceTrafficUsed,
+            $deviceTrafficLimit,
+            $userPlanId,
+            $subscriptionEndsAt,
+            $devicesCount,
+        ]);
     }
 
     /**
@@ -142,5 +310,46 @@ class VpnAccessPolicyService
         // Note: This is a simple approach. For production, consider using cache tags
         // or a more sophisticated cache invalidation strategy.
         Cache::forget("user_subscription_status:{$userId}");
+    }
+
+    private function allow(string $reason, string $message, array $meta = []): array
+    {
+        return [
+            'can_start' => true,
+            'reason' => $reason,
+            'message' => $message,
+            'requires_subscription' => false,
+            ...$meta,
+        ];
+    }
+
+    private function deny(string $reason, string $message, array $meta = []): array
+    {
+        return [
+            'can_start' => false,
+            'reason' => $reason,
+            'message' => $message,
+            'requires_subscription' => true,
+            ...$meta,
+        ];
+    }
+
+    private function resolvePlanForUser(User $user, bool $hasActivePaidPlan): ?Plan
+    {
+        if ($hasActivePaidPlan && !empty($user->plan_id)) {
+            return Plan::find($user->plan_id);
+        }
+
+        $freePlan = Plan::where('key', 'free')->first();
+
+        if ($freePlan) {
+            return $freePlan;
+        }
+
+        if (!empty($user->plan_id)) {
+            return Plan::find($user->plan_id);
+        }
+
+        return null;
     }
 }

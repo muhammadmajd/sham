@@ -40,6 +40,7 @@ class PlanPageController extends Controller
             'interval' => ['nullable', 'string'],
             'stripe_price_id' => ['nullable', 'string'],
             'traffic_limit' => ['nullable', 'integer'],
+            'devices_number' => ['nullable', 'integer'],
         ]);
 
         Plan::create($data);
@@ -66,6 +67,7 @@ class PlanPageController extends Controller
             'interval' => ['nullable', 'string'],
             'stripe_price_id' => ['nullable', 'string'],
             'traffic_limit' => ['nullable', 'integer'],
+            'devices_number' => ['nullable', 'integer'],
         ]);
 
         $plan->update($data);

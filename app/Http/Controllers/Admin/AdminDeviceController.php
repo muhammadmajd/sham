@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Device;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\TrafficLimitService;
 use Illuminate\Http\Request;
 
 class AdminDeviceController extends Controller
@@ -36,6 +37,7 @@ class AdminDeviceController extends Controller
             'created_at',
             'updated_at',
             'last_seen_at',
+            'active'
         ];
 
         if (!in_array($sortBy, $allowedSorts, true)) {
@@ -68,7 +70,7 @@ class AdminDeviceController extends Controller
     /**
      * Create a new device.
      */
-    public function store(Request $request)
+    public function store(Request $request, TrafficLimitService $trafficLimits)
     {
         AuditService::log('admin.devices.store', 'Device', [
             'from' => false,
@@ -84,6 +86,8 @@ class AdminDeviceController extends Controller
             'download_bytes' => ['nullable', 'integer', 'min:0'],
             'upload_bytes' => ['nullable', 'integer', 'min:0'],
             'last_seen_at' => ['nullable', 'date'],
+            'active' => ['nullable', 'boolean'],
+            'traffic_limit_bytes' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $device = Device::create([
@@ -94,8 +98,14 @@ class AdminDeviceController extends Controller
             'xray_email' => $data['xray_email'] ?? null,
             'download_bytes' => $data['download_bytes'] ?? 0,
             'upload_bytes' => $data['upload_bytes'] ?? 0,
+            'traffic_limit_bytes' => $data['traffic_limit_bytes'] ?? 0,
             'last_seen_at' => $data['last_seen_at'] ?? null,
+            'active' => $data['active'] ?? true,
         ]);
+
+        if (!array_key_exists('traffic_limit_bytes', $data)) {
+            $trafficLimits->applyCorrectDeviceLimit($device);
+        }
 
         return response()->json($device->load('user:id,name,email'), 201);
     }
@@ -122,6 +132,7 @@ class AdminDeviceController extends Controller
             'download_bytes' => ['nullable', 'integer', 'min:0'],
             'upload_bytes' => ['nullable', 'integer', 'min:0'],
             'last_seen_at' => ['nullable', 'date'],
+            'active' => ['nullable', 'boolean'],
         ]);
 
         // Use fill for mass assignment on simple fields
@@ -134,6 +145,7 @@ class AdminDeviceController extends Controller
             'download_bytes',
             'upload_bytes',
             'last_seen_at',
+            'active'
         ];
 
         foreach ($fillableFields as $field) {
@@ -168,8 +180,11 @@ class AdminDeviceController extends Controller
     /**
      * Attach a user to a device.
      */
-    public function attachUser(Request $request, $id)
-    {
+    public function attachUser(
+        Request $request,
+        $id,
+        TrafficLimitService $trafficLimits
+    ) {
         AuditService::log('admin.devices.attach_user', 'Device', [
             'from' => false,
             'to' => true,
@@ -180,7 +195,10 @@ class AdminDeviceController extends Controller
         ]);
 
         $device = Device::findOrFail($id);
-        $device->user_id = $data['user_id'];
+        $user = User::findOrFail($data['user_id']);
+
+        $device->user_id = $user->id;
+        $trafficLimits->setDeviceLimitForUser($device, $user, false);
         $device->save();
 
         return response()->json($device->load('user:id,name,email'));
@@ -189,7 +207,7 @@ class AdminDeviceController extends Controller
     /**
      * Detach user from a device.
      */
-    public function detachUser($id)
+    public function detachUser($id, TrafficLimitService $trafficLimits)
     {
         AuditService::log('admin.devices.detach_user', 'Device', [
             'from' => false,
@@ -198,6 +216,7 @@ class AdminDeviceController extends Controller
 
         $device = Device::findOrFail($id);
         $device->user_id = null;
+        $trafficLimits->setGuestDeviceLimit($device, false);
         $device->save();
 
         return response()->json($device->load('user:id,name,email'));
